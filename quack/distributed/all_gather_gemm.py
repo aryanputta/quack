@@ -272,6 +272,19 @@ def _check(err_ret):
     return ret[0] if len(ret) == 1 else tuple(ret)
 
 
+def _capture_dependencies(capture_info):
+    """Return capture dependencies across the five- and six-value bindings."""
+    if len(capture_info) == 6:
+        _, _, _, deps, _, num_deps = capture_info
+    elif len(capture_info) == 5:
+        _, _, _, deps, num_deps = capture_info
+    else:
+        raise RuntimeError(
+            f"cudaStreamGetCaptureInfo returned an unexpected number of values: {len(capture_info)}"
+        )
+    return deps, num_deps
+
+
 class AllGatherRunner:
     """Transport half of overlapped AllGather+GEMM: owns the rotating
     symmetric gather buffers, arrival flags, streams/events, and the
@@ -798,8 +811,8 @@ class AllGatherRunner:
                 #   A/B.
                 compute_stream = torch.cuda.current_stream(self.device)
                 if not self.capture_lockstep:
-                    _, _, _, deps, _, num_deps = _check(
-                        runtime.cudaStreamGetCaptureInfo(compute_stream.cuda_stream)
+                    deps, num_deps = _capture_dependencies(
+                        _check(runtime.cudaStreamGetCaptureInfo(compute_stream.cuda_stream))
                     )
                 self._ev_join.record(self.push_stream)
                 compute_stream.wait_event(self._ev_join)
